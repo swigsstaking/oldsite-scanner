@@ -1,0 +1,78 @@
+# Fichier d'exemple de domaines .ch à scanner
+# Un domaine par ligne
+# Les lignes commençant par # sont des commentaires et seront ignorées
+
+# Institutions fédérales
+admin.ch
+parlament.ch
+bk.admin.ch
+eda.admin.ch
+
+# Transports
+sbb.ch
+cff.ch
+bls.ch
+postauto.ch
+
+# Télécommunications
+swisscom.ch
+sunrise.ch
+salt.ch
+
+# Services postaux
+post.ch
+
+# Médias publics
+srf.ch
+rts.ch
+rsi.ch
+srgssr.ch
+
+# Universités et écoles
+ethz.ch
+epfl.ch
+uzh.ch
+unige.ch
+unil.ch
+unibe.ch
+unifr.ch
+unisg.ch
+
+# Commerce
+migros.ch
+coop.ch
+manor.ch
+galaxus.ch
+digitec.ch
+
+# Médias
+20min.ch
+blick.ch
+tagesanzeiger.ch
+nzz.ch
+watson.ch
+lematin.ch
+24heures.ch
+
+# Banques
+ubs.com
+credit-suisse.com
+raiffeisen.ch
+postfinance.ch
+
+# Assurances
+swisslife.ch
+axa.ch
+zurich.ch
+baloise.ch
+
+# Tourisme
+myswitzerland.com
+swisstopo.ch
+meteosuisse.ch
+
+# Autres
+swissinfo.ch
+swissgrid.ch
+swissmedic.ch
+bag.admin.ch

@@ -1,0 +1,10 @@
+[Unit]
+Description=Old .ch scanner - batch scan
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/oldsite-scanner
+Environment="PATH=/opt/oldsite-scanner/venv/bin"
+ExecStart=/opt/oldsite-scanner/venv/bin/python -m backend.scan_ch_sites --limit 500
