@@ -1,0 +1,19 @@
+[Unit]
+Description=Old .ch scanner - Full pipeline (fetch + scan)
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/oldsite-scanner
+Environment="PATH=/opt/oldsite-scanner/venv/bin"
+
+# Étape 1: Récupérer les domaines via AXFR
+ExecStartPre=/opt/oldsite-scanner/venv/bin/python -m backend.fetch_ch_domains
+
+# Étape 2: Scanner les domaines (limité à 1000 par défaut)
+ExecStart=/opt/oldsite-scanner/venv/bin/python -m backend.scan_ch_sites --limit 1000
+
+# Timeout de 2 heures pour le scan complet
+TimeoutStartSec=7200

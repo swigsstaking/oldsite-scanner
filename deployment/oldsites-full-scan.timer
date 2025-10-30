@@ -1,0 +1,12 @@
+[Unit]
+Description=Run full .ch scan pipeline daily (fetch domains + scan)
+
+[Timer]
+# Exécuter tous les jours à 3h00 du matin
+OnCalendar=*-*-* 03:00:00
+
+# Si le serveur était éteint, rattraper le scan
+Persistent=true
+
+[Install]
+WantedBy=timers.target
