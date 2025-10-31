@@ -276,6 +276,20 @@ async def job_status():
     else:
         response["domains_count"] = 0
     
+    # Vérifier si un fichier de progression existe (pendant la récupération)
+    progress_file = DOMAINS_FILE + ".progress"
+    if os.path.exists(progress_file) and JOB_STATE["state"] == "fetching":
+        try:
+            with open(progress_file, 'r') as f:
+                content = f.read()
+                # Extraire le nombre de domaines de la ligne "# Domaines trouvés jusqu'à présent: 12345"
+                import re
+                match = re.search(r'Domaines trouvés jusqu\'à présent: (\d+)', content)
+                if match:
+                    response["fetching_progress"] = int(match.group(1))
+        except:
+            pass
+    
     return response
 
 

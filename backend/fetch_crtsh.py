@@ -155,12 +155,13 @@ async def verify_domain_dns(domain: str) -> bool:
         return False
 
 
-async def fetch_all_domains(verify_dns: bool = False) -> Set[str]:
+async def fetch_all_domains(verify_dns: bool = False, progress_callback=None) -> Set[str]:
     """
     Récupère tous les domaines .ch depuis crt.sh
     
     Args:
         verify_dns: Si True, vérifie que les domaines résolvent (lent!)
+        progress_callback: Fonction appelée avec le nombre de domaines trouvés
     
     Returns:
         Set de tous les domaines trouvés
@@ -177,9 +178,12 @@ async def fetch_all_domains(verify_dns: bool = False) -> Set[str]:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Combiner les résultats
-        for result in results:
+        for i, result in enumerate(results):
             if isinstance(result, set):
                 all_domains.update(result)
+                # Appeler le callback de progression
+                if progress_callback:
+                    await progress_callback(len(all_domains))
             elif isinstance(result, Exception):
                 print(f"   ⚠️  Une requête a échoué: {result}")
     
@@ -241,6 +245,22 @@ async def save_domains(domains: Set[str], filepath: str):
     print(f"   ✅ Fichier créé: {filepath}")
 
 
+async def save_progress(domains: Set[str], filepath: str):
+    """
+    Sauvegarde la progression pendant la récupération (fichier temporaire)
+    
+    Args:
+        domains: Set de domaines actuels
+        filepath: Chemin du fichier de sortie
+    """
+    progress_file = filepath + ".progress"
+    
+    async with aiofiles.open(progress_file, 'w') as f:
+        await f.write(f"# Récupération en cours...\n")
+        await f.write(f"# Domaines trouvés jusqu'à présent: {len(domains)}\n")
+        await f.write(f"# Dernière mise à jour: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+
 async def main():
     """Point d'entrée principal"""
     print("=" * 80)
@@ -250,8 +270,13 @@ async def main():
     print(f"📁 Fichier de sortie: {OUTPUT_PATH}")
     print()
     
+    # Callback pour sauvegarder la progression
+    async def progress_callback(count):
+        await save_progress(set(), OUTPUT_PATH)  # Sauvegarde juste le compteur
+        print(f"   📊 Progression: {count} domaines trouvés jusqu'à présent...")
+    
     # Récupérer les domaines
-    domains = await fetch_all_domains(verify_dns=False)  # DNS verification désactivée (trop lent)
+    domains = await fetch_all_domains(verify_dns=False, progress_callback=progress_callback)  # DNS verification désactivée (trop lent)
     
     if not domains:
         print("\n❌ Aucun domaine trouvé!")

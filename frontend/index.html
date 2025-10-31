@@ -536,8 +536,12 @@
                 if (data.pid) {
                     statusText += ` (PID ${data.pid})`;
                 }
-                if (data.domains_count > 0) {
-                    statusText += ` | ${data.domains_count} domaines`;
+                
+                // Afficher la progression pendant la récupération
+                if (data.state === 'fetching' && data.fetching_progress) {
+                    statusText += ` | 🔄 ${data.fetching_progress.toLocaleString()} domaines trouvés...`;
+                } else if (data.domains_count > 0) {
+                    statusText += ` | ✅ ${data.domains_count.toLocaleString()} domaines`;
                 }
                 jobStatus.textContent = statusText;
                 
