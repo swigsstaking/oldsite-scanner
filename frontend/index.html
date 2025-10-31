@@ -117,6 +117,93 @@
             background: #5568d3;
         }
 
+        .controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .job-controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .job-controls h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .job-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .job-buttons button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-fetch {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-fetch:hover:not(:disabled) {
+            background: #2980b9;
+        }
+
+        .btn-scan {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .btn-scan:hover:not(:disabled) {
+            background: #27ae60;
+        }
+
+        .btn-stop {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #c0392b;
+        }
+
+        .job-status {
+            margin-left: 20px;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 0.95em;
+            color: #666;
+        }
+
+        .job-status.fetching {
+            background: #d4edff;
+            color: #2980b9;
+        }
+
+        .job-status.scanning {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .job-status.idle {
+            background: #f8f9fa;
+            color: #666;
+        }
+
         .table-container {
             background: white;
             border-radius: 12px;
@@ -332,6 +419,16 @@
             <p class="subtitle">Détecteur automatique de sites suisses obsolètes</p>
         </header>
 
+        <div class="job-controls">
+            <h3>⚙️ Contrôle des jobs</h3>
+            <div class="job-buttons">
+                <button id="btnFetch" class="btn-fetch">1. 🌐 Récupérer les domaines (.ch)</button>
+                <button id="btnScan" class="btn-scan">2. 🔍 Scanner</button>
+                <button id="btnStop" class="btn-stop">⏹️ Arrêter</button>
+                <span id="jobStatus" class="job-status">État: chargement...</span>
+            </div>
+        </div>
+
         <div class="stats" id="stats">
             <div class="stat-card">
                 <div class="stat-value" id="totalScans">-</div>
@@ -422,6 +519,100 @@
     </div>
 
     <script>
+        // Variables globales
+        const btnFetch = document.getElementById('btnFetch');
+        const btnScan = document.getElementById('btnScan');
+        const btnStop = document.getElementById('btnStop');
+        const jobStatus = document.getElementById('jobStatus');
+
+        // Fonction pour rafraîchir le statut des jobs
+        async function refreshJobStatus() {
+            try {
+                const res = await fetch('/api/job/status');
+                const data = await res.json();
+                
+                // Mettre à jour le texte du statut
+                let statusText = `État: ${data.state}`;
+                if (data.pid) {
+                    statusText += ` (PID ${data.pid})`;
+                }
+                if (data.domains_count > 0) {
+                    statusText += ` | ${data.domains_count} domaines`;
+                }
+                jobStatus.textContent = statusText;
+                
+                // Mettre à jour la classe CSS
+                jobStatus.className = `job-status ${data.state}`;
+                
+                // Gérer l'état des boutons
+                if (data.state === 'idle') {
+                    btnFetch.disabled = false;
+                    btnScan.disabled = !data.domains_file_exists;
+                    btnStop.disabled = true;
+                } else {
+                    btnFetch.disabled = true;
+                    btnScan.disabled = true;
+                    btnStop.disabled = false;
+                }
+            } catch (error) {
+                console.error('Erreur lors du rafraîchissement du statut:', error);
+                jobStatus.textContent = 'État: erreur';
+            }
+        }
+
+        // Événements des boutons
+        btnFetch.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/fetch/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'fetch_started') {
+                    alert('✅ Récupération des domaines lancée!');
+                } else if (data.status === 'busy') {
+                    alert('⚠️ Un job est déjà en cours: ' + data.state);
+                }
+                await refreshJobStatus();
+            } catch (error) {
+                alert('❌ Erreur: ' + error.message);
+            }
+        });
+
+        btnScan.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/scan/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'scan_started') {
+                    alert('✅ Scan lancé! Les résultats apparaîtront progressivement.');
+                    // Recharger les scans après 10 secondes
+                    setTimeout(loadScans, 10000);
+                } else if (data.status === 'busy') {
+                    alert('⚠️ Un job est déjà en cours: ' + data.state);
+                } else if (data.status === 'error') {
+                    alert('❌ ' + data.message);
+                }
+                await refreshJobStatus();
+            } catch (error) {
+                alert('❌ Erreur: ' + error.message);
+            }
+        });
+
+        btnStop.addEventListener('click', async () => {
+            if (!confirm('Voulez-vous vraiment arrêter le job en cours?')) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/job/stop', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'stopped') {
+                    alert('✅ Job arrêté: ' + data.job_type);
+                } else if (data.status === 'not_running') {
+                    alert('ℹ️ Aucun job en cours');
+                }
+                await refreshJobStatus();
+            } catch (error) {
+                alert('❌ Erreur: ' + error.message);
+            }
+        });
+
         async function loadStats() {
             try {
                 const response = await fetch('/api/stats');
@@ -522,6 +713,10 @@
         // Charger les données au démarrage
         loadStats();
         loadScans();
+        refreshJobStatus();
+        
+        // Rafraîchir le statut des jobs toutes les 5 secondes
+        setInterval(refreshJobStatus, 5000);
     </script>
 </body>
 </html>
