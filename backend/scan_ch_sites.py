@@ -8,13 +8,26 @@ import argparse
 from backend import config, db
 
 
-def score_site(headers, body_sample):
+def score_site(headers, body_sample, http_code):
     """
     Calcule un score d'ancienneté basé sur divers critères techniques.
     Plus le score est élevé, plus le site est probablement ancien.
+    
+    NOUVEAU: Pénalise les sites morts et favorise les sites actifs mais obsolètes.
     """
     score = 0
     reasons = []
+    
+    # FILTRAGE: Pénaliser fortement les sites non-fonctionnels
+    if http_code >= 400:
+        score -= 100  # Pénalité massive pour sites morts
+        reasons.append(f"Site non accessible (HTTP {http_code})")
+        return score, "; ".join(reasons)
+    
+    # BONUS: Site actif et accessible
+    if http_code == 200:
+        score += 5
+        reasons.append("Site actif (HTTP 200)")
 
     # Conversion des headers en dict case-insensitive
     headers_lower = {k.lower(): v for k, v in headers.items()}
@@ -55,9 +68,31 @@ def score_site(headers, body_sample):
         score += 15
         reasons.append(f"Charset ancien ({content_type})")
     
+    # 5. Vérifier que le site a du contenu réel
+    if not body_sample or len(body_sample) < 100:
+        score -= 50  # Pénalité pour sites vides ou parking
+        reasons.append("Contenu insuffisant (site parking ou vide)")
+        return score, "; ".join(reasons)
+    
     # 5. Analyse du body_sample
     if body_sample:
         body_lower = body_sample.lower()
+        
+        # Détecter les pages parking / domaines à vendre
+        parking_keywords = ['domain for sale', 'domaine à vendre', 'buy this domain', 
+                           'acheter ce domaine', 'domain parking', 'sedo', 'godaddy parking']
+        if any(keyword in body_lower for keyword in parking_keywords):
+            score -= 80
+            reasons.append("Page parking / domaine à vendre")
+            return score, "; ".join(reasons)
+        
+        # Détecter les pages d'erreur
+        error_keywords = ['page not found', 'page introuvable', 'error 404', 'erreur 404',
+                         'site en construction', 'under construction', 'coming soon']
+        if any(keyword in body_lower for keyword in error_keywords):
+            score -= 60
+            reasons.append("Page d'erreur ou en construction")
+            return score, "; ".join(reasons)
         
         # HTML4 / XHTML 1.0
         if '<!doctype html public "-//w3c//dtd html 4' in body_lower:
@@ -90,18 +125,54 @@ def score_site(headers, body_sample):
             score += 5
             reasons.append("Pas de meta viewport")
         
-        # Détection de vieux CMS
+        # Détection de vieux CMS (AMÉLIORÉ)
         if 'joomla! 1.' in body_lower or 'joomla! 2.' in body_lower:
-            score += 15
-            reasons.append("Joomla! ancien")
+            score += 25
+            reasons.append("Joomla! 1.x/2.x (très ancien, vulnérable)")
+        elif 'joomla! 3.0' in body_lower or 'joomla! 3.1' in body_lower or 'joomla! 3.2' in body_lower:
+            score += 20
+            reasons.append("Joomla! 3.0-3.2 (ancien)")
+        
         if 'wordpress' in body_lower:
             # Recherche de version
             wp_version = re.search(r'wordpress[/\s]+(\d+\.\d+)', body_lower)
             if wp_version:
-                version = float(wp_version.group(1))
-                if version < 4.0:
-                    score += 15
-                    reasons.append(f"WordPress ancien ({version})")
+                try:
+                    version = float(wp_version.group(1))
+                    if version < 3.0:
+                        score += 30
+                        reasons.append(f"WordPress {version} (très ancien, vulnérable)")
+                    elif version < 4.0:
+                        score += 20
+                        reasons.append(f"WordPress {version} (ancien)")
+                    elif version < 5.0:
+                        score += 10
+                        reasons.append(f"WordPress {version} (dépassé)")
+                except:
+                    pass
+        
+        # Détecter d'autres vieux CMS
+        if 'typo3 4.' in body_lower:
+            score += 20
+            reasons.append("TYPO3 4.x (ancien)")
+        if 'drupal 6' in body_lower or 'drupal 7' in body_lower:
+            score += 20
+            reasons.append("Drupal 6/7 (ancien)")
+        
+        # Détecter du contenu réel (BONUS pour sites actifs)
+        has_real_content = False
+        content_indicators = ['<article', '<section', '<nav', '<main', '<p>', '<h1', '<h2']
+        content_count = sum(1 for indicator in content_indicators if indicator in body_lower)
+        if content_count >= 3:
+            has_real_content = True
+            score += 10
+            reasons.append("Site avec contenu structuré (actif)")
+        
+        # Détecter des images (signe de site actif)
+        img_count = body_lower.count('<img')
+        if img_count > 5:
+            score += 5
+            reasons.append(f"Site avec images ({img_count} images)")
         
         # Generator meta tag
         generator_match = re.search(r'<meta\s+name=["\']generator["\']\s+content=["\']([^"\']+)', body_lower)
@@ -114,9 +185,22 @@ def score_site(headers, body_sample):
     # 6. Absence de headers de sécurité modernes
     security_headers = ['strict-transport-security', 'x-frame-options', 'x-content-type-options', 'content-security-policy']
     missing_security = sum(1 for h in security_headers if h not in headers_lower)
-    if missing_security >= 3:
+    if missing_security == 4:
+        score += 15
+        reasons.append("Aucun header de sécurité moderne")
+    elif missing_security >= 3:
         score += 10
         reasons.append(f"Manque {missing_security}/4 headers de sécurité")
+    
+    # 7. Détecter les technologies modernes (PÉNALITÉ - site probablement récent)
+    modern_tech = ['react', 'vue.js', 'angular', 'next.js', 'nuxt', 'tailwind', 'bootstrap 5']
+    if body_sample:
+        body_lower = body_sample.lower()
+        for tech in modern_tech:
+            if tech in body_lower:
+                score -= 15
+                reasons.append(f"Technologie moderne détectée: {tech}")
+                break
     
     return score, "; ".join(reasons) if reasons else "Aucun critère d'ancienneté détecté"
 
@@ -144,8 +228,8 @@ async def scan_domain(session, domain, semaphore):
                     
                     latency_ms = int((time.time() - start_time) * 1000)
                     
-                    # Scoring
-                    score, reasons = score_site(headers, body_sample)
+                    # Scoring (passer le code HTTP)
+                    score, reasons = score_site(headers, body_sample, http_code)
                     
                     # Bonus si pas HTTPS
                     if scheme == 'http':
